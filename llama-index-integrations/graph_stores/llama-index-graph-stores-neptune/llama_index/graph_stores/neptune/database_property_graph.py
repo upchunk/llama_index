@@ -3,7 +3,11 @@ import logging
 
 from typing import Any, Dict, Tuple, List, Optional
 from .neptune import NeptuneQueryException, create_neptune_database_client
-from .base_property_graph import NeptuneBasePropertyGraph, BASE_ENTITY_LABEL
+from .base_property_graph import (
+    NeptuneBasePropertyGraph,
+    BASE_ENTITY_LABEL,
+    BASE_NODE_LABEL,
+)
 from llama_index.core.vector_stores.types import VectorStoreQuery
 from llama_index.core.graph_stores.types import LabelledNode, EntityNode, ChunkNode
 
@@ -67,6 +71,8 @@ class NeptuneDatabasePropertyGraphStore(NeptuneBasePropertyGraph):
                 {
                     "message": "An error occurred while executing the query.",
                     "details": str(e),
+                    "query": query,
+                    "parameters": str(param_map),
                 }
             )
 
@@ -121,19 +127,15 @@ class NeptuneDatabasePropertyGraphStore(NeptuneBasePropertyGraph):
         if entity_dicts:
             for d in entity_dicts:
                 self.structured_query(
-                    """
+                    f"""
                     WITH $data AS row
-                    MERGE (e:`"""
-                    + BASE_ENTITY_LABEL
-                    + """` {id: row.id})
+                    MERGE (e:`{BASE_NODE_LABEL}` {{id: row.id}})
                     SET e += removeKeyFromMap(row.properties, '')
-                    SET e.name = row.name
-                    SET e:`"""
-                    + str(d["name"])
-                    + """`
+                    SET e.name = row.name, e:`{BASE_ENTITY_LABEL}`
+                    SET e:`{d['label']}`
                     WITH e, row
                     WHERE removeKeyFromMap(row.properties, '').triplet_source_id IS NOT NULL
-                    MERGE (c:Chunk {id: removeKeyFromMap(row.properties, '').triplet_source_id})
+                    MERGE (c:Chunk {{id: removeKeyFromMap(row.properties, '').triplet_source_id}})
                     MERGE (e)<-[:MENTIONS]-(c)
                     RETURN count(*) as count
                     """,

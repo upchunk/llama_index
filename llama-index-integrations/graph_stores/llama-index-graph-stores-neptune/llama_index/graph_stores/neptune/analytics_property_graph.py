@@ -6,7 +6,11 @@ from .neptune import (
     remove_empty_values,
     create_neptune_analytics_client,
 )
-from .base_property_graph import NeptuneBasePropertyGraph, BASE_ENTITY_LABEL
+from .base_property_graph import (
+    NeptuneBasePropertyGraph,
+    BASE_ENTITY_LABEL,
+    BASE_NODE_LABEL,
+)
 from llama_index.core.vector_stores.types import VectorStoreQuery
 from llama_index.core.graph_stores.types import LabelledNode, EntityNode, ChunkNode
 
@@ -61,6 +65,8 @@ class NeptuneAnalyticsPropertyGraphStore(NeptuneBasePropertyGraph):
                 {
                     "message": "An error occurred while executing the query.",
                     "details": str(e),
+                    "query": query,
+                    "parameters": str(param_map),
                 }
             )
 
@@ -83,7 +89,7 @@ class NeptuneAnalyticsPropertyGraphStore(NeptuneBasePropertyGraph):
         )
 
         data = self.structured_query(
-            f"""MATCH (e:'{BASE_ENTITY_LABEL}')
+            f"""MATCH (e:`{BASE_ENTITY_LABEL}`)
             WHERE ({filters})
             CALL neptune.algo.vectors.get(e)
             YIELD embedding
@@ -157,22 +163,18 @@ class NeptuneAnalyticsPropertyGraphStore(NeptuneBasePropertyGraph):
         if entity_dicts:
             for d in entity_dicts:
                 self.structured_query(
-                    """
+                    f"""
                     WITH $data AS row
-                    MERGE (e:`"""
-                    + BASE_ENTITY_LABEL
-                    + """` {id: row.id})
+                    MERGE (e:`{BASE_NODE_LABEL}` {{id: row.id}})
                     SET e += removeKeyFromMap(row.properties, '')
-                    SET e.name = row.name
-                    SET e:`"""
-                    + str(d["name"])
-                    + """`
+                    SET e.name = row.name, e:`{BASE_ENTITY_LABEL}`
+                    SET e:`{d['label']}`
                     WITH e, row
                     WHERE removeKeyFromMap(row.properties, '').triplet_source_id IS NOT NULL
-                    MERGE (c:Chunk {id: removeKeyFromMap(row.properties, '').triplet_source_id})
+                    MERGE (c:Chunk {{id: removeKeyFromMap(row.properties, '').triplet_source_id}})
                     MERGE (e)<-[:MENTIONS]-(c)
-                    WITH c, row.embedding as e
-                    CALL neptune.algo.vectors.upsert(c, e)
+                    WITH e, row.embedding as em
+                    CALL neptune.algo.vectors.upsert(e, em)
                     RETURN count(*) as count
                     """,
                     param_map={"data": d},

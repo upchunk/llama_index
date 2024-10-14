@@ -1,4 +1,5 @@
 """Google's Gemini multi-modal models."""
+
 import os
 from typing import Any, Dict, Optional, Sequence, Tuple
 
@@ -20,7 +21,7 @@ from llama_index.core.multi_modal_llms import (
     MultiModalLLM,
     MultiModalLLMMetadata,
 )
-from llama_index.core.schema import ImageDocument
+from llama_index.core.schema import ImageNode
 from llama_index.llms.gemini.utils import (
     ROLES_FROM_GEMINI,
     chat_from_gemini_response,
@@ -53,8 +54,8 @@ class GeminiMultiModal(MultiModalLLM):
     temperature: float = Field(
         default=DEFAULT_TEMPERATURE,
         description="The temperature to use during generation.",
-        gte=0.0,
-        lte=1.0,
+        ge=0.0,
+        le=1.0,
     )
     max_tokens: int = Field(
         default=DEFAULT_NUM_OUTPUTS,
@@ -113,15 +114,15 @@ class GeminiMultiModal(MultiModalLLM):
                 f"Available models are: {GEMINI_MM_MODELS}"
             )
 
-        self._model = genai.GenerativeModel(
+        model = genai.GenerativeModel(
             model_name=model_name,
             generation_config=final_gen_config,
             safety_settings=safety_settings,
         )
 
-        self._model_meta = genai.get_model(model_name)
+        model_meta = genai.get_model(model_name)
 
-        supported_methods = self._model_meta.supported_generation_methods
+        supported_methods = model_meta.supported_generation_methods
         if "generateContent" not in supported_methods:
             raise ValueError(
                 f"Model {model_name} does not support content generation, only "
@@ -129,9 +130,9 @@ class GeminiMultiModal(MultiModalLLM):
             )
 
         if not max_tokens:
-            max_tokens = self._model_meta.output_token_limit
+            max_tokens = model_meta.output_token_limit
         else:
-            max_tokens = min(max_tokens, self._model_meta.output_token_limit)
+            max_tokens = min(max_tokens, model_meta.output_token_limit)
 
         super().__init__(
             model_name=model_name,
@@ -140,6 +141,8 @@ class GeminiMultiModal(MultiModalLLM):
             generate_kwargs=generate_kwargs,
             callback_manager=callback_manager,
         )
+        self._model = model
+        self._model_meta = model_meta
 
     @classmethod
     def class_name(cls) -> str:
@@ -155,14 +158,14 @@ class GeminiMultiModal(MultiModalLLM):
         )
 
     def complete(
-        self, prompt: str, image_documents: Sequence[ImageDocument], **kwargs: Any
+        self, prompt: str, image_documents: Sequence[ImageNode], **kwargs: Any
     ) -> CompletionResponse:
         images = [PIL.Image.open(doc.resolve_image()) for doc in image_documents]
         result = self._model.generate_content([prompt, *images], **kwargs)
         return completion_from_gemini_response(result)
 
     def stream_complete(
-        self, prompt: str, image_documents: Sequence[ImageDocument], **kwargs: Any
+        self, prompt: str, image_documents: Sequence[ImageNode], **kwargs: Any
     ) -> CompletionResponseGen:
         images = [PIL.Image.open(doc.resolve_image()) for doc in image_documents]
         result = self._model.generate_content([prompt, *images], stream=True, **kwargs)
@@ -203,14 +206,14 @@ class GeminiMultiModal(MultiModalLLM):
         return gen()
 
     async def acomplete(
-        self, prompt: str, image_documents: Sequence[ImageDocument], **kwargs: Any
+        self, prompt: str, image_documents: Sequence[ImageNode], **kwargs: Any
     ) -> CompletionResponse:
         images = [PIL.Image.open(doc.resolve_image()) for doc in image_documents]
         result = await self._model.generate_content_async([prompt, *images], **kwargs)
         return completion_from_gemini_response(result)
 
     async def astream_complete(
-        self, prompt: str, image_documents: Sequence[ImageDocument], **kwargs: Any
+        self, prompt: str, image_documents: Sequence[ImageNode], **kwargs: Any
     ) -> CompletionResponseAsyncGen:
         images = [PIL.Image.open(doc.resolve_image()) for doc in image_documents]
         ait = await self._model.generate_content_async(

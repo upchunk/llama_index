@@ -99,7 +99,7 @@ class QueryResponseDataset(BaseModel):
     def save_json(self, path: str) -> None:
         """Save json."""
         with open(path, "w") as f:
-            json.dump(self.dict(), f, indent=4)
+            json.dump(self.model_dump(), f, indent=4)
 
     @classmethod
     def from_json(cls, path: str) -> QueryResponseDataset:
@@ -234,7 +234,7 @@ class DatasetGenerator(PromptMixin):
                 [
                     Document(
                         text=node.get_content(metadata_mode=self._metadata_mode),
-                        metadata=node.metadata,
+                        metadata=node.metadata,  # type: ignore
                     )
                 ],
                 callback_manager=self.callback_manager,
